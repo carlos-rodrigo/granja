@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
+
 	"granja/internal/api"
 	"granja/internal/api/handler"
 	"granja/internal/config"
@@ -41,7 +43,8 @@ func main() {
 	workerRepo := repository.NewWorkerRepository(db)
 
 	projectSvc := service.NewProjectService(projectRepo)
-	epicSvc := service.NewEpicService(epicRepo, taskRepo)
+	parserSvc := service.NewParserService(anthropic.Model(cfg.AnthropicModel))
+	epicSvc := service.NewEpicService(epicRepo, taskRepo, parserSvc)
 	taskSvc := service.NewTaskService(taskRepo, epicRepo)
 
 	dockerSvc, err := service.NewDockerService(cfg.DockerWorkerImage)
@@ -66,7 +69,8 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	orch := orchestrator.New(logger, cfg.OrchestratorPoll, cfg.MaxWorkers, "http://localhost"+cfg.Addr, taskRepo, epicRepo, workerRepo, projectRepo, taskSvc, dockerSvc)
+	reviewer := orchestrator.NewReviewer(anthropic.Model(cfg.AnthropicModel), cfg.ReviewRepoPath)
+	orch := orchestrator.New(logger, cfg.OrchestratorPoll, cfg.MaxWorkers, "http://localhost"+cfg.Addr, taskRepo, epicRepo, workerRepo, projectRepo, taskSvc, epicSvc, dockerSvc, reviewer)
 	orchCtx, cancelOrch := context.WithCancel(context.Background())
 	defer cancelOrch()
 	go orch.Run(orchCtx)

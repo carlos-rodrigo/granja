@@ -23,10 +23,12 @@ type Orchestrator struct {
 	workerRepo  *repository.WorkerRepository
 	projectRepo *repository.ProjectRepository
 	taskSvc     *service.TaskService
+	epicSvc     *service.EpicService
 	dockerSvc   *service.DockerService
+	reviewer    *Reviewer
 }
 
-func New(logger *slog.Logger, pollInterval time.Duration, maxWorkers int, apiBaseURL string, taskRepo *repository.TaskRepository, epicRepo *repository.EpicRepository, workerRepo *repository.WorkerRepository, projectRepo *repository.ProjectRepository, taskSvc *service.TaskService, dockerSvc *service.DockerService) *Orchestrator {
+func New(logger *slog.Logger, pollInterval time.Duration, maxWorkers int, apiBaseURL string, taskRepo *repository.TaskRepository, epicRepo *repository.EpicRepository, workerRepo *repository.WorkerRepository, projectRepo *repository.ProjectRepository, taskSvc *service.TaskService, epicSvc *service.EpicService, dockerSvc *service.DockerService, reviewer *Reviewer) *Orchestrator {
 	return &Orchestrator{
 		logger:       logger,
 		pollInterval: pollInterval,
@@ -37,7 +39,9 @@ func New(logger *slog.Logger, pollInterval time.Duration, maxWorkers int, apiBas
 		workerRepo:   workerRepo,
 		projectRepo:  projectRepo,
 		taskSvc:      taskSvc,
+		epicSvc:      epicSvc,
 		dockerSvc:    dockerSvc,
+		reviewer:     reviewer,
 	}
 }
 
@@ -61,6 +65,10 @@ func (o *Orchestrator) Run(ctx context.Context) {
 func (o *Orchestrator) tick(ctx context.Context) {
 	if err := o.reconcileWorkers(ctx); err != nil {
 		o.logger.Error("reconcile workers", "error", err)
+	}
+
+	if err := o.reviewReadyEpics(ctx); err != nil {
+		o.logger.Error("review ready epics", "error", err)
 	}
 
 	active, err := o.workerRepo.CountActive(ctx)
@@ -118,6 +126,51 @@ func (o *Orchestrator) tick(ctx context.Context) {
 			o.logger.Error("create worker record", "task_id", task.ID, "error", err)
 		}
 	}
+}
+
+func (o *Orchestrator) reviewReadyEpics(ctx context.Context) error {
+	if o.reviewer == nil || o.epicSvc == nil {
+		return nil
+	}
+	epics, err := o.epicRepo.List(ctx, "", string(domain.EpicReady))
+	if err != nil {
+		return err
+	}
+	for _, epic := range epics {
+		isReady, err := o.epicSvc.IsReadyForReview(ctx, epic.ID)
+		if err != nil {
+			o.logger.Error("check review readiness", "epic_id", epic.ID, "error", err)
+			continue
+		}
+		if !isReady {
+			continue
+		}
+		project, err := o.projectRepo.GetByID(ctx, epic.ProjectID)
+		if err != nil || project == nil {
+			o.logger.Error("load project for review", "epic_id", epic.ID, "error", err)
+			continue
+		}
+
+		reviewResult, err := o.reviewer.ReviewEpic(ctx, &epic, project)
+		if err != nil {
+			o.logger.Error("review epic", "epic_id", epic.ID, "error", err)
+			_ = o.epicRepo.UpdateStatus(ctx, epic.ID, domain.EpicBlocked, err.Error())
+			continue
+		}
+
+		if reviewResult.IsPass() {
+			o.triggerMergeFlow(ctx, &epic)
+		}
+		if err := o.epicSvc.HandleReviewResult(ctx, epic.ID, *reviewResult); err != nil {
+			o.logger.Error("handle review result", "epic_id", epic.ID, "error", err)
+			_ = o.epicRepo.UpdateStatus(ctx, epic.ID, domain.EpicBlocked, err.Error())
+		}
+	}
+	return nil
+}
+
+func (o *Orchestrator) triggerMergeFlow(_ context.Context, epic *domain.Epic) {
+	o.logger.Info("merge flow triggered", "epic_id", epic.ID, "branch", epic.BranchName)
 }
 
 func (o *Orchestrator) reconcileWorkers(ctx context.Context) error {

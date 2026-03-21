@@ -98,3 +98,12 @@ func (r *EpicRepository) MarkReadyWhenAllDone(ctx context.Context) error {
 	`, time.Now().UTC())
 	return err
 }
+
+func (r *EpicRepository) SetReviewResult(ctx context.Context, id, reviewResult string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE epics
+		SET review_result = ?, updated_at = ?
+		WHERE id = ?
+	`, reviewResult, time.Now().UTC(), id)
+	return err
+}

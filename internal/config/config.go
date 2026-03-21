@@ -12,6 +12,8 @@ type Config struct {
 	DockerWorkerImage string
 	MaxWorkers        int
 	OrchestratorPoll  time.Duration
+	AnthropicModel    string
+	ReviewRepoPath    string
 }
 
 func Load() Config {
@@ -21,6 +23,8 @@ func Load() Config {
 		DockerWorkerImage: getEnv("GRANJA_WORKER_IMAGE", "granja-worker:latest"),
 		MaxWorkers:        getEnvInt("GRANJA_MAX_WORKERS", 3),
 		OrchestratorPoll:  getEnvDuration("GRANJA_ORCH_POLL", 10*time.Second),
+		AnthropicModel:    getEnv("GRANJA_ANTHROPIC_MODEL", "claude-sonnet-4-5"),
+		ReviewRepoPath:    getEnv("GRANJA_REVIEW_REPO_PATH", "."),
 	}
 }
 
