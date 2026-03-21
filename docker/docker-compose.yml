@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  worker:
+    image: granja-worker:latest
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    environment:
+      TASK_ID: ${TASK_ID:-}
+      REPO_URL: ${REPO_URL:-}
+      BRANCH: ${BRANCH:-}
+      GRANJA_API: ${GRANJA_API:-http://host.docker.internal:8080}
+      TASK_PROMPT: ${TASK_PROMPT:-}
+      TASK_TITLE: ${TASK_TITLE:-}
+    volumes:
+      - ${PI_CONFIG_DIR:-~/.pi}:/root/.pi
+      - worker-workspace:/workspace
+    networks:
+      - granja
+    restart: "no"
+
+networks:
+  granja:
+    driver: bridge
+
+volumes:
+  worker-workspace:
