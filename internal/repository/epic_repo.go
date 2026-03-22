@@ -54,9 +54,12 @@ func (r *EpicRepository) List(ctx context.Context, projectID, status string) ([]
 	var out []domain.Epic
 	for rows.Next() {
 		var e domain.Epic
-		if err := rows.Scan(&e.ID, &e.ProjectID, &e.Title, &e.Status, &e.BranchName, &e.PRDContent, &e.DesignContent, &e.ReviewResult, &e.ErrorMessage, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		var reviewResult, errorMessage sql.NullString
+		if err := rows.Scan(&e.ID, &e.ProjectID, &e.Title, &e.Status, &e.BranchName, &e.PRDContent, &e.DesignContent, &reviewResult, &errorMessage, &e.CreatedAt, &e.UpdatedAt); err != nil {
 			return nil, err
 		}
+		e.ReviewResult = reviewResult.String
+		e.ErrorMessage = errorMessage.String
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -64,16 +67,19 @@ func (r *EpicRepository) List(ctx context.Context, projectID, status string) ([]
 
 func (r *EpicRepository) GetByID(ctx context.Context, id string) (*domain.Epic, error) {
 	var e domain.Epic
+	var reviewResult, errorMessage sql.NullString
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, project_id, title, status, branch_name, prd_content, design_content, review_result, error_message, created_at, updated_at
 		FROM epics WHERE id = ?
-	`, id).Scan(&e.ID, &e.ProjectID, &e.Title, &e.Status, &e.BranchName, &e.PRDContent, &e.DesignContent, &e.ReviewResult, &e.ErrorMessage, &e.CreatedAt, &e.UpdatedAt)
+	`, id).Scan(&e.ID, &e.ProjectID, &e.Title, &e.Status, &e.BranchName, &e.PRDContent, &e.DesignContent, &reviewResult, &errorMessage, &e.CreatedAt, &e.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	e.ReviewResult = reviewResult.String
+	e.ErrorMessage = errorMessage.String
 	return &e, nil
 }
 
