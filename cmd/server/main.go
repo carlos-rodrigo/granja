@@ -10,8 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
-
 	"granja/internal/api"
 	"granja/internal/api/handler"
 	"granja/internal/config"
@@ -43,7 +41,7 @@ func main() {
 	workerRepo := repository.NewWorkerRepository(db)
 
 	projectSvc := service.NewProjectService(projectRepo)
-	parserSvc := service.NewParserService(anthropic.Model(cfg.AnthropicModel))
+	parserSvc := service.NewParserService(cfg.PiModel)
 	epicSvc := service.NewEpicService(epicRepo, taskRepo, parserSvc)
 	taskSvc := service.NewTaskService(taskRepo, epicRepo)
 
@@ -69,7 +67,7 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	reviewer := orchestrator.NewReviewer(anthropic.Model(cfg.AnthropicModel), cfg.ReviewRepoPath)
+	reviewer := orchestrator.NewReviewer(cfg.PiModel, cfg.PiThinking, cfg.ReviewRepoPath)
 
 	var githubSvc *service.GitHubService
 	if cfg.GitHubToken != "" {

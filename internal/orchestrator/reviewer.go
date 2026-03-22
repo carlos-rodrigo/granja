@@ -7,31 +7,33 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
-
-	"github.com/anthropics/anthropic-sdk-go"
 
 	"granja/internal/domain"
 	"granja/internal/service"
 )
 
 type Reviewer struct {
-	client  anthropic.Client
-	model   anthropic.Model
-	repoDir string
+	piModel    string
+	piThinking string
+	repoDir    string
 }
 
-func NewReviewer(model anthropic.Model, repoDir string) *Reviewer {
-	if model == "" {
-		model = anthropic.ModelClaudeSonnet4_5
+func NewReviewer(piModel, piThinking, repoDir string) *Reviewer {
+	if piModel == "" {
+		piModel = "openai-codex/gpt-5.3"
+	}
+	if piThinking == "" {
+		piThinking = "high"
 	}
 	if strings.TrimSpace(repoDir) == "" {
 		repoDir = "."
 	}
 	return &Reviewer{
-		client:  anthropic.NewClient(),
-		model:   model,
-		repoDir: repoDir,
+		piModel:    piModel,
+		piThinking: piThinking,
+		repoDir:    repoDir,
 	}
 }
 
@@ -39,68 +41,94 @@ func (r *Reviewer) ReviewEpic(ctx context.Context, epic *domain.Epic, project *d
 	if epic == nil || project == nil {
 		return nil, errors.New("epic and project are required")
 	}
+
 	diff, err := r.gitDiff(ctx, project, epic)
 	if err != nil {
 		return nil, err
 	}
 
-	prompt := fmt.Sprintf("PRD:\n%s\n\nDESIGN:\n%s\n\nDIFF:\n%s", epic.PRDContent, epic.DesignContent, diff)
-	resp, err := r.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     r.model,
-		MaxTokens: 4096,
-		System: []anthropic.TextBlockParam{{
-			Text: "Review the implementation strictly against PRD and design. Always call emit_review exactly once. Return FAIL when any required behavior is missing or broken.",
-		}},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
-		},
-		Tools: []anthropic.ToolUnionParam{
-			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{
-				Properties: map[string]any{
-					"result":  map[string]any{"type": "string", "enum": []string{"PASS", "FAIL"}},
-					"summary": map[string]any{"type": "string"},
-					"issues": map[string]any{
-						"type": "array",
-						"items": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"title":       map[string]any{"type": "string"},
-								"description": map[string]any{"type": "string"},
-							},
-							"required":             []string{"title", "description"},
-							"additionalProperties": false,
-						},
-					},
-				},
-				Required: []string{"result", "summary", "issues"},
-			}, "emit_review"),
-		},
-		ToolChoice: anthropic.ToolChoiceParamOfTool("emit_review"),
-	})
+	// Create temp directory for review
+	tmpDir, err := os.MkdirTemp("", "granja-review-*")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Write context files
+	if err := os.WriteFile(filepath.Join(tmpDir, "prd.md"), []byte(epic.PRDContent), 0644); err != nil {
+		return nil, fmt.Errorf("write prd: %w", err)
+	}
+	if epic.DesignContent != "" {
+		if err := os.WriteFile(filepath.Join(tmpDir, "design.md"), []byte(epic.DesignContent), 0644); err != nil {
+			return nil, fmt.Errorf("write design: %w", err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "diff.patch"), []byte(diff), 0644); err != nil {
+		return nil, fmt.Errorf("write diff: %w", err)
 	}
 
-	for _, block := range resp.Content {
-		if block.Type != "tool_use" || block.Name != "emit_review" {
-			continue
-		}
-		var out struct {
-			Result  string                    `json:"result"`
-			Summary string                    `json:"summary"`
-			Issues  []service.EpicReviewIssue `json:"issues"`
-		}
-		if err := json.Unmarshal(block.Input, &out); err != nil {
-			return nil, fmt.Errorf("decode review output: %w", err)
-		}
-		return &service.EpicReviewResult{
-			Result:  strings.ToUpper(strings.TrimSpace(out.Result)),
-			Summary: strings.TrimSpace(out.Summary),
-			Issues:  out.Issues,
-		}, nil
+	// Build prompt for Pi
+	prompt := `You are a code reviewer. Review the implementation against the PRD and design.
+
+Read:
+- prd.md - The product requirements
+- design.md - The technical design (if exists)
+- diff.patch - The code changes to review
+
+Analyze whether the implementation correctly fulfills all requirements in the PRD.
+
+After reviewing, create a file called review.json with this exact format:
+
+{
+  "result": "PASS" or "FAIL",
+  "summary": "Brief summary of your review",
+  "issues": [
+    {"title": "Issue title", "description": "Description of the problem"}
+  ]
+}
+
+Rules:
+- Return "PASS" only if ALL user stories are correctly implemented
+- Return "FAIL" if any required behavior is missing or broken
+- List specific issues if failing
+- Be strict but fair
+
+Read the files and create review.json.`
+
+	// Run Pi
+	cmd := exec.CommandContext(ctx, "pi",
+		"--model", r.piModel,
+		"--thinking", r.piThinking,
+		"-p", prompt)
+	cmd.Dir = tmpDir
+	cmd.Env = append(os.Environ(), "HOME="+os.Getenv("HOME"))
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("pi review failed: %w\noutput: %s", err, string(output))
 	}
 
-	return nil, errors.New("reviewer did not return tool_use output")
+	// Read review.json
+	reviewPath := filepath.Join(tmpDir, "review.json")
+	reviewData, err := os.ReadFile(reviewPath)
+	if err != nil {
+		return nil, fmt.Errorf("read review.json: %w (pi may not have created it)", err)
+	}
+
+	var result struct {
+		Result  string                    `json:"result"`
+		Summary string                    `json:"summary"`
+		Issues  []service.EpicReviewIssue `json:"issues"`
+	}
+	if err := json.Unmarshal(reviewData, &result); err != nil {
+		return nil, fmt.Errorf("parse review.json: %w", err)
+	}
+
+	return &service.EpicReviewResult{
+		Result:  strings.ToUpper(strings.TrimSpace(result.Result)),
+		Summary: strings.TrimSpace(result.Summary),
+		Issues:  result.Issues,
+	}, nil
 }
 
 func (r *Reviewer) gitDiff(ctx context.Context, project *domain.Project, epic *domain.Epic) (string, error) {
