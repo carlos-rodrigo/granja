@@ -14,6 +14,7 @@ type Config struct {
 	OrchestratorPoll  time.Duration
 	AnthropicModel    string
 	ReviewRepoPath    string
+	GitHubToken       string
 }
 
 func Load() Config {
@@ -25,6 +26,7 @@ func Load() Config {
 		OrchestratorPoll:  getEnvDuration("GRANJA_ORCH_POLL", 10*time.Second),
 		AnthropicModel:    getEnv("GRANJA_ANTHROPIC_MODEL", "claude-sonnet-4-5"),
 		ReviewRepoPath:    getEnv("GRANJA_REVIEW_REPO_PATH", "."),
+		GitHubToken:       getEnv("GITHUB_TOKEN", ""),
 	}
 }
 

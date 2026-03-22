@@ -70,7 +70,16 @@ func main() {
 	}
 
 	reviewer := orchestrator.NewReviewer(anthropic.Model(cfg.AnthropicModel), cfg.ReviewRepoPath)
-	orch := orchestrator.New(logger, cfg.OrchestratorPoll, cfg.MaxWorkers, "http://localhost"+cfg.Addr, taskRepo, epicRepo, workerRepo, projectRepo, taskSvc, epicSvc, dockerSvc, reviewer)
+
+	var githubSvc *service.GitHubService
+	if cfg.GitHubToken != "" {
+		githubSvc = service.NewGitHubService(cfg.GitHubToken)
+		logger.Info("GitHub service initialized")
+	} else {
+		logger.Warn("GITHUB_TOKEN not set, merge flow will be disabled")
+	}
+
+	orch := orchestrator.New(logger, cfg.OrchestratorPoll, cfg.MaxWorkers, "http://localhost"+cfg.Addr, taskRepo, epicRepo, workerRepo, projectRepo, taskSvc, epicSvc, dockerSvc, reviewer, githubSvc)
 	orchCtx, cancelOrch := context.WithCancel(context.Background())
 	defer cancelOrch()
 	go orch.Run(orchCtx)
