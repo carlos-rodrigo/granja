@@ -16,6 +16,30 @@ func NewTaskRepository(db *sql.DB) *TaskRepository {
 	return &TaskRepository{db: db}
 }
 
+func scanTask(scanner interface{ Scan(...any) error }) (domain.Task, error) {
+	var t domain.Task
+	var containerID, workerLogs, relevantFiles sql.NullString
+	if err := scanner.Scan(&t.ID, &t.EpicID, &t.Title, &t.Description, &t.Status, &t.Effort, &relevantFiles, &containerID, &workerLogs, &t.StartedAt, &t.CompletedAt, &t.CreatedAt); err != nil {
+		return t, err
+	}
+	t.ContainerID = containerID.String
+	t.WorkerLogs = workerLogs.String
+	t.RelevantFiles = relevantFiles.String
+	return t, nil
+}
+
+func scanTasks(rows *sql.Rows) ([]domain.Task, error) {
+	var out []domain.Task
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 func (r *TaskRepository) Create(ctx context.Context, t domain.Task) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO tasks (id, epic_id, title, description, status, effort, relevant_files)
@@ -41,24 +65,15 @@ func (r *TaskRepository) ListByEpic(ctx context.Context, epicID string) ([]domai
 		return nil, err
 	}
 	defer rows.Close()
-
-	var out []domain.Task
-	for rows.Next() {
-		var t domain.Task
-		if err := rows.Scan(&t.ID, &t.EpicID, &t.Title, &t.Description, &t.Status, &t.Effort, &t.RelevantFiles, &t.ContainerID, &t.WorkerLogs, &t.StartedAt, &t.CompletedAt, &t.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, t)
-	}
-	return out, rows.Err()
+	return scanTasks(rows)
 }
 
 func (r *TaskRepository) GetByID(ctx context.Context, id string) (*domain.Task, error) {
-	var t domain.Task
-	err := r.db.QueryRowContext(ctx, `
+	row := r.db.QueryRowContext(ctx, `
 		SELECT id, epic_id, title, description, status, effort, relevant_files, container_id, worker_logs, started_at, completed_at, created_at
 		FROM tasks WHERE id = ?
-	`, id).Scan(&t.ID, &t.EpicID, &t.Title, &t.Description, &t.Status, &t.Effort, &t.RelevantFiles, &t.ContainerID, &t.WorkerLogs, &t.StartedAt, &t.CompletedAt, &t.CreatedAt)
+	`, id)
+	t, err := scanTask(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -110,14 +125,5 @@ func (r *TaskRepository) FindReadyTasks(ctx context.Context, limit int) ([]domai
 		return nil, err
 	}
 	defer rows.Close()
-
-	var out []domain.Task
-	for rows.Next() {
-		var t domain.Task
-		if err := rows.Scan(&t.ID, &t.EpicID, &t.Title, &t.Description, &t.Status, &t.Effort, &t.RelevantFiles, &t.ContainerID, &t.WorkerLogs, &t.StartedAt, &t.CompletedAt, &t.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, t)
-	}
-	return out, rows.Err()
+	return scanTasks(rows)
 }

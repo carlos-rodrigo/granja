@@ -1,3 +1,7 @@
 granja.db
 granja.db-shm
 granja.db-wal
+granja
+granja.log
+granja.pid
+granja.db

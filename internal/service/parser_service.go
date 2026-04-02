@@ -13,6 +13,7 @@ import (
 )
 
 type ParsedTask struct {
+	FileID        string   `json:"file_id"`
 	Title         string   `json:"title"`
 	Description   string   `json:"description"`
 	Effort        string   `json:"effort"`
@@ -145,6 +146,13 @@ Start by reading the PRD, then create the task files.`)
 		if err != nil {
 			continue // Skip malformed tasks
 		}
+		// Extract file ID from filename (e.g., "001" from "001-setup.md")
+		if task.FileID == "" {
+			matches := taskIDPattern.FindStringSubmatch(entry.Name())
+			if len(matches) >= 2 {
+				task.FileID = matches[1]
+			}
+		}
 		tasks = append(tasks, task)
 	}
 
@@ -189,7 +197,9 @@ func parseTaskFile(path string) (ParsedTask, error) {
 
 	// Parse frontmatter
 	for _, line := range frontmatterLines {
-		if strings.HasPrefix(line, "depends:") {
+		if strings.HasPrefix(line, "id:") {
+			task.FileID = strings.TrimSpace(strings.TrimPrefix(line, "id:"))
+		} else if strings.HasPrefix(line, "depends:") {
 			// Parse depends array
 			depsStr := strings.TrimPrefix(line, "depends:")
 			depsStr = strings.TrimSpace(depsStr)

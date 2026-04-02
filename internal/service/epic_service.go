@@ -172,7 +172,9 @@ func (s *EpicService) parseAndCreateTasks(ctx context.Context, epicID, prd, desi
 		return errors.New("parser returned no tasks")
 	}
 
+
 	titleToID := make(map[string]string, len(parsedTasks))
+	fileIDToTaskID := make(map[string]string, len(parsedTasks))
 	for _, pt := range parsedTasks {
 		title := strings.TrimSpace(pt.Title)
 		if title == "" {
@@ -197,12 +199,20 @@ func (s *EpicService) parseAndCreateTasks(ctx context.Context, epicID, prd, desi
 			return err
 		}
 		titleToID[normTitle] = taskID
+		if fid := strings.TrimSpace(pt.FileID); fid != "" {
+			fileIDToTaskID[fid] = taskID
+		}
 	}
 
 	for _, pt := range parsedTasks {
 		taskID := titleToID[strings.ToLower(strings.TrimSpace(pt.Title))]
 		for _, dep := range pt.Dependencies {
-			depID, ok := titleToID[strings.ToLower(strings.TrimSpace(dep))]
+			dep = strings.TrimSpace(dep)
+			// Try file ID first (e.g., "001"), then fall back to title match
+			depID, ok := fileIDToTaskID[dep]
+			if !ok {
+				depID, ok = titleToID[strings.ToLower(dep)]
+			}
 			if !ok {
 				return fmt.Errorf("unknown dependency %q for task %q", dep, pt.Title)
 			}
