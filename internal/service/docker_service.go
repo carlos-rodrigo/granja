@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 )
 
@@ -67,13 +70,39 @@ func (s *DockerService) SpawnWorker(ctx context.Context, in SpawnInput) (string,
 		"BRANCH=" + in.Branch,
 		"GRANJA_API=" + in.APIBaseURL,
 	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("get home dir: %w", err)
+	}
+
+	mounts := []mount.Mount{
+		{
+			Type:     mount.TypeBind,
+			Source:   filepath.Join(homeDir, ".pi"),
+			Target:   "/root/.pi",
+			ReadOnly: true,
+		},
+	}
+
+	gitconfigPath := filepath.Join(homeDir, ".gitconfig")
+	if _, err := os.Stat(gitconfigPath); err == nil {
+		mounts = append(mounts, mount.Mount{
+			Type:     mount.TypeBind,
+			Source:   gitconfigPath,
+			Target:   "/root/.gitconfig",
+			ReadOnly: true,
+		})
+	}
+
 	resp, err := s.cli.ContainerCreate(ctx, &container.Config{
 		Image: s.workerImage,
 		Env:   env,
 		Labels: map[string]string{
 			"granja.task_id": in.TaskID,
 		},
-	}, nil, nil, nil, fmt.Sprintf("granja-%s", in.TaskID))
+	}, &container.HostConfig{
+		Mounts: mounts,
+	}, nil, nil, fmt.Sprintf("granja-%s", in.TaskID))
 	if err != nil {
 		return "", err
 	}

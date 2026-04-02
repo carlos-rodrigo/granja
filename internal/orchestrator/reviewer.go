@@ -98,7 +98,6 @@ Read the files and create review.json.`
 	// Run Pi
 	cmd := exec.CommandContext(ctx, "pi",
 		"--print",
-		"--dangerously-skip-permissions",
 		"--model", r.piModel,
 		"--thinking", r.piThinking,
 		"-p", prompt)
