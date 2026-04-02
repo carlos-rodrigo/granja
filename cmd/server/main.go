@@ -77,7 +77,7 @@ func main() {
 		logger.Warn("GITHUB_TOKEN not set, merge flow will be disabled")
 	}
 
-	orch := orchestrator.New(logger, cfg.OrchestratorPoll, cfg.MaxWorkers, "http://localhost"+cfg.Addr, taskRepo, epicRepo, workerRepo, projectRepo, taskSvc, epicSvc, dockerSvc, reviewer, githubSvc)
+	orch := orchestrator.New(logger, cfg.OrchestratorPoll, cfg.MaxWorkers, "http://host.docker.internal"+cfg.Addr, taskRepo, epicRepo, workerRepo, projectRepo, taskSvc, epicSvc, dockerSvc, reviewer, githubSvc)
 	orchCtx, cancelOrch := context.WithCancel(context.Background())
 	defer cancelOrch()
 	go orch.Run(orchCtx)

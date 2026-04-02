@@ -80,7 +80,7 @@ func (s *DockerService) SpawnWorker(ctx context.Context, in SpawnInput) (string,
 			Type:     mount.TypeBind,
 			Source:   filepath.Join(homeDir, ".pi"),
 			Target:   "/root/.pi",
-			ReadOnly: true,
+			ReadOnly: false,
 		},
 	}
 

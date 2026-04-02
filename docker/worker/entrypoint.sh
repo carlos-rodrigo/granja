@@ -58,7 +58,7 @@ else
 fi
 
 # 4) Run Pi agent in non-interactive mode
-if ! pi --print -p "$TASK_PROMPT"; then
+if ! pi --print --no-extensions -p "$TASK_PROMPT"; then
   post_fail "Pi exited with non-zero"
   exit 1
 fi
