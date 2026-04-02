@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 
 	"granja/internal/domain"
-	"granja/internal/repository"
 )
 
 type EpicReviewIssue struct {
@@ -30,12 +29,12 @@ func (r EpicReviewResult) IsPass() bool {
 }
 
 type EpicService struct {
-	epicRepo *repository.EpicRepository
-	taskRepo *repository.TaskRepository
+	epicRepo EpicRepo
+	taskRepo TaskRepo
 	parser   *ParserService
 }
 
-func NewEpicService(epicRepo *repository.EpicRepository, taskRepo *repository.TaskRepository, parser *ParserService) *EpicService {
+func NewEpicService(epicRepo EpicRepo, taskRepo TaskRepo, parser *ParserService) *EpicService {
 	return &EpicService{epicRepo: epicRepo, taskRepo: taskRepo, parser: parser}
 }
 

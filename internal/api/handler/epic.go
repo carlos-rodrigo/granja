@@ -1,21 +1,28 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 
+	"granja/internal/domain"
 	"granja/internal/service"
 )
 
-type EpicHandler struct {
-	epicService *service.EpicService
-	taskService *service.TaskService
+// EpicTaskLister is the interface the epic handler needs for listing tasks.
+type EpicTaskLister interface {
+	ListByEpic(ctx context.Context, epicID string) ([]domain.Task, error)
 }
 
-func NewEpicHandler(epicService *service.EpicService, taskService *service.TaskService) *EpicHandler {
+type EpicHandler struct {
+	epicService *service.EpicService
+	taskService EpicTaskLister
+}
+
+func NewEpicHandler(epicService *service.EpicService, taskService EpicTaskLister) *EpicHandler {
 	return &EpicHandler{epicService: epicService, taskService: taskService}
 }
 

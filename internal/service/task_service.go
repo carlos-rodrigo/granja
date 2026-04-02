@@ -6,15 +6,14 @@ import (
 	"strings"
 
 	"granja/internal/domain"
-	"granja/internal/repository"
 )
 
 type TaskService struct {
-	taskRepo *repository.TaskRepository
-	epicRepo *repository.EpicRepository
+	taskRepo TaskRepo
+	epicRepo EpicRepo
 }
 
-func NewTaskService(taskRepo *repository.TaskRepository, epicRepo *repository.EpicRepository) *TaskService {
+func NewTaskService(taskRepo TaskRepo, epicRepo EpicRepo) *TaskService {
 	return &TaskService{taskRepo: taskRepo, epicRepo: epicRepo}
 }
 

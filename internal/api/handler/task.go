@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -8,14 +9,19 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"granja/internal/domain"
-	"granja/internal/service"
 )
 
-type TaskHandler struct {
-	service *service.TaskService
+// TaskServicer is the interface the task handler requires from the service layer.
+type TaskServicer interface {
+	UpdateStatus(ctx context.Context, id string, status domain.TaskStatus, logs string) error
+	GetByID(ctx context.Context, id string) (*domain.Task, error)
 }
 
-func NewTaskHandler(service *service.TaskService) *TaskHandler {
+type TaskHandler struct {
+	service TaskServicer
+}
+
+func NewTaskHandler(service TaskServicer) *TaskHandler {
 	return &TaskHandler{service: service}
 }
 
