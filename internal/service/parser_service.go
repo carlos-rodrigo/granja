@@ -111,6 +111,8 @@ Start by reading the PRD, then create the task files.`)
 
 	// Run Pi
 	cmd := exec.CommandContext(ctx, "pi",
+		"--print",
+		"--dangerously-skip-permissions",
 		"--model", s.piModel,
 		"--thinking", s.piThinking,
 		"-p", prompt)

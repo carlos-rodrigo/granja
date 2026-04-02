@@ -47,3 +47,39 @@ func (h *TaskHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	}
 	respondJSON(w, http.StatusOK, task)
 }
+
+func (h *TaskHandler) Complete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.service.UpdateStatus(r.Context(), id, domain.TaskDone, ""); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	task, err := h.service.GetByID(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if task == nil {
+		respondError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, task)
+}
+
+func (h *TaskHandler) Fail(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.service.UpdateStatus(r.Context(), id, domain.TaskBlocked, ""); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	task, err := h.service.GetByID(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if task == nil {
+		respondError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, task)
+}

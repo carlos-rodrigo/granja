@@ -41,6 +41,8 @@ func NewRouter(logger *slog.Logger, h Handlers) http.Handler {
 		api.Get("/epics/{id}/tasks", h.Epic.ListTasks)
 
 		api.Patch("/tasks/{id}", h.Task.Patch)
+		api.Post("/tasks/{id}/complete", h.Task.Complete)
+		api.Post("/tasks/{id}/fail", h.Task.Fail)
 
 		api.Get("/workers", h.Worker.List)
 		api.Get("/workers/{id}/logs", h.Worker.Logs)
