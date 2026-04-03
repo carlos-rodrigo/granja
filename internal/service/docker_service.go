@@ -69,6 +69,7 @@ func (s *DockerService) SpawnWorker(ctx context.Context, in SpawnInput) (string,
 		"REPO_URL=" + in.ProjectRepo,
 		"BRANCH=" + in.Branch,
 		"GRANJA_API=" + in.APIBaseURL,
+		"GITHUB_TOKEN=" + os.Getenv("GITHUB_TOKEN"),
 	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -101,7 +102,8 @@ func (s *DockerService) SpawnWorker(ctx context.Context, in SpawnInput) (string,
 			"granja.task_id": in.TaskID,
 		},
 	}, &container.HostConfig{
-		Mounts: mounts,
+		NetworkMode: "host",
+		Mounts:      mounts,
 	}, nil, nil, fmt.Sprintf("granja-%s", in.TaskID))
 	if err != nil {
 		return "", err

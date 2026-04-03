@@ -33,7 +33,12 @@ trap 'on_error $?' ERR
 git config --global user.email "granja@localhost"
 git config --global user.name "Granja Worker"
 
-# 2) Clone repo (or use existing)
+# 2) Configure git to use token auth
+if [ -n "$GITHUB_TOKEN" ]; then
+  git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+fi
+
+# 3) Clone repo (or use existing)
 REPO_DIR="/workspace/repo"
 if [[ ! -d "$REPO_DIR/.git" ]]; then
   rm -rf "$REPO_DIR"
@@ -41,7 +46,7 @@ if [[ ! -d "$REPO_DIR/.git" ]]; then
 fi
 cd "$REPO_DIR"
 
-# 3) Checkout/create epic branch
+# 4) Checkout/create epic branch
 CURRENT_ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
 if [[ "$CURRENT_ORIGIN_URL" != "$REPO_URL" ]]; then
   git remote remove origin 2>/dev/null || true
@@ -57,13 +62,13 @@ else
   git checkout -B "$BRANCH"
 fi
 
-# 4) Run Pi agent in non-interactive mode
+# 5) Run Pi agent in non-interactive mode
 if ! pi --print --no-extensions -p "$TASK_PROMPT"; then
   post_fail "Pi exited with non-zero"
   exit 1
 fi
 
-# 5) On success: commit, push, callback complete
+# 6) On success: commit, push, callback complete
 git add -A
 if ! git diff --cached --quiet; then
   git commit -m "feat: $TASK_TITLE"
