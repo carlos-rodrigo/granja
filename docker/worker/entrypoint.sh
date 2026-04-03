@@ -73,7 +73,22 @@ git add -A
 if ! git diff --cached --quiet; then
   git commit -m "feat: $TASK_TITLE"
 fi
-git push -u origin "$BRANCH"
+# Before pushing, pull any changes from other workers
+MAX_RETRIES=3
+for i in $(seq 1 $MAX_RETRIES); do
+  git pull --rebase origin "$BRANCH" 2>/dev/null || true
+  if git push origin "$BRANCH" 2>&1; then
+    echo "Push succeeded on attempt $i"
+    break
+  fi
+  if [ "$i" -eq "$MAX_RETRIES" ]; then
+    echo "Push failed after $MAX_RETRIES attempts"
+    post_fail
+    exit 1
+  fi
+  echo "Push failed, retrying in 5s (attempt $i/$MAX_RETRIES)..."
+  sleep 5
+done
 post_complete
 
 echo "Task $TASK_ID completed successfully"
